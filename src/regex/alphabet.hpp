@@ -65,6 +65,12 @@ struct CharAlphabet {
   static constexpr uint64_t Ord(CharT chr) { return chr; }
 };
 
+struct AnyAlphabet {
+  using CharT = uint64_t;
+  static constexpr CharT Chr(uint64_t x) { return x; }
+  static constexpr uint64_t Ord(CharT chr) { return chr; }
+};
+
 }  // namespace rgx
 
 #endif /* REGEX_ALPHABET_HPP */

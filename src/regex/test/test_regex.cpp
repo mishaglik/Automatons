@@ -8,16 +8,16 @@ TEST(REGEX_TEST, RECREATION) {
   (void)a;
 
   std::string rgx = "a+_((b?aosg3\\\\\\?)?+\\+\\*a+_)*+((a+b)(c+d))?";
-  auto* regex = rgx::Regex<rgx::CharAlphabet>::FromString(rgx);
+  auto* regex = rgx::RegexImpl<rgx::CharAlphabet>::FromString(rgx);
   ASSERT_NE(regex, nullptr);
-  ASSERT_EQ(rgx::Regex<rgx::CharAlphabet>::FromString("ab++"), nullptr);
-  ASSERT_EQ(rgx::Regex<rgx::CharAlphabet>::FromString("a\\"), nullptr);
-  ASSERT_EQ(rgx::Regex<rgx::CharAlphabet>::FromString("a+("), nullptr);
+  ASSERT_EQ(rgx::RegexImpl<rgx::CharAlphabet>::FromString("ab++"), nullptr);
+  ASSERT_EQ(rgx::RegexImpl<rgx::CharAlphabet>::FromString("a\\"), nullptr);
+  ASSERT_EQ(rgx::RegexImpl<rgx::CharAlphabet>::FromString("a+("), nullptr);
 
   std::stringstream ss;
   ss << *regex;
   ASSERT_EQ(ss.str(), rgx);
-  const rgx::Regex<rgx::CharAlphabet>* r = rgx::Regex<rgx::CharAlphabet>::FromString("(a+bb*(ab+b))?");
+  const rgx::RegexImpl<rgx::CharAlphabet>* r = rgx::RegexImpl<rgx::CharAlphabet>::FromString("(a+bb*(ab+b))?");
   ss << *mgk::cast<rgx::RegexQuantified<rgx::CharAlphabet>>(r);
   delete regex;
 }
@@ -27,23 +27,23 @@ TEST(REGEX_TEST, RECREATION2) {
   (void)alph;
 
   std::string rgx = "a+_((b?aaaa)?+a+_)*+((a+b)(a+b))?";
-  auto* regex = rgx::Regex<rgx::SimpleAlphabet<2>>::FromString(rgx);
+  auto* regex = rgx::RegexImpl<rgx::SimpleAlphabet<2>>::FromString(rgx);
   ASSERT_NE(regex, nullptr);
-  ASSERT_EQ(rgx::Regex<rgx::SimpleAlphabet<2>>::FromString("ab++"), nullptr);
-  ASSERT_EQ(rgx::Regex<rgx::SimpleAlphabet<2>>::FromString("a\\"), nullptr);
-  ASSERT_EQ(rgx::Regex<rgx::SimpleAlphabet<2>>::FromString("a+("), nullptr);
+  ASSERT_EQ(rgx::RegexImpl<rgx::SimpleAlphabet<2>>::FromString("ab++"), nullptr);
+  ASSERT_EQ(rgx::RegexImpl<rgx::SimpleAlphabet<2>>::FromString("a\\"), nullptr);
+  ASSERT_EQ(rgx::RegexImpl<rgx::SimpleAlphabet<2>>::FromString("a+("), nullptr);
 
   std::stringstream ss;
   ss << *regex;
   ASSERT_EQ(ss.str(), rgx);
   delete regex;
 
-  const rgx::Regex<rgx::SimpleAlphabet<2>>* r =
-      rgx::Regex<rgx::SimpleAlphabet<2>>::FromString("(a+bb*(ab+b))?");
+  const rgx::RegexImpl<rgx::SimpleAlphabet<2>>* r =
+      rgx::RegexImpl<rgx::SimpleAlphabet<2>>::FromString("(a+bb*(ab+b))?");
   ss << *mgk::cast<rgx::RegexQuantified<rgx::SimpleAlphabet<2>>>(r);
-  r = rgx::Regex<rgx::SimpleAlphabet<2>>::FromString("a+b?");
+  r = rgx::RegexImpl<rgx::SimpleAlphabet<2>>::FromString("a+b?");
   ss << *mgk::cast<rgx::RegexAlternate<rgx::SimpleAlphabet<2>>>(r);;
-  r = rgx::Regex<rgx::SimpleAlphabet<2>>::FromString("a");
+  r = rgx::RegexImpl<rgx::SimpleAlphabet<2>>::FromString("a");
   ss << *mgk::cast<rgx::RegexLetter<rgx::SimpleAlphabet<2>>>(r);;
 }
 
