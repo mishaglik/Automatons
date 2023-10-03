@@ -43,6 +43,8 @@ class FDFA {
 
   Node start() const { return start_state; }
 
+  void setStart(Node node) { start_state = node; }
+
   bool has_transition(Node from, uint64_t via, Node to) const {
     assert(from < size());
     return m_transitions[from][via] == to;

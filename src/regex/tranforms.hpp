@@ -73,7 +73,7 @@ template <typename Alphabet>
 FDFA<Alphabet> FDFAFromNFA(const NFSA<Alphabet>& nfa) {
   FDFA<Alphabet> dfa;
   using Vertex = std::vector<typename NFSA<Alphabet>::Node>;
-  std::vector<Vertex> vertices{nfa.start()};
+  std::vector<Vertex> vertices{{nfa.start()}};
 
   for (size_t i = 0; i < vertices.size(); ++i) {
     for (uint64_t chr = 1; chr < Alphabet::Size; ++chr) {
@@ -105,6 +105,60 @@ FDFA<Alphabet> FDFAFromNFA(const NFSA<Alphabet>& nfa) {
     }
   }
   return dfa;
+}
+
+template <typename Alphabet>
+FDFA<Alphabet> Minimize(const FDFA<Alphabet> fdfa) {
+  FDFA<Alphabet> mindfa;
+  mindfa.create_node();
+  mindfa.makeFinite(1);
+  std::vector<uint64_t> classes(fdfa.size());
+  for(size_t i = 0; i < classes.size(); ++i) {
+    classes[i] = fdfa.isFinite(i);
+  }
+  mindfa.setStart(classes[0]);
+
+  bool added_new_class = true;
+  while(added_new_class) {
+    added_new_class = false;
+    std::vector<uint64_t> new_classes = classes;
+    std::vector<bool> inited(mindfa.size(), 0);
+    for(size_t i = 0; i < classes.size(); ++i) {
+      if(!inited[classes[i]]) {
+        inited[classes[i]] = true;
+        for(size_t via = 0; via < fdfa.transitions(i).size(); ++via) {
+          mindfa.set_transition(classes[i], via, classes[fdfa.transitions(i)[via]]);
+        }
+        continue;
+      }
+      std::array<uint64_t, Alphabet::Size> trans;
+      for(size_t via = 0; via < fdfa.transitions(i).size(); ++via) {
+        trans[via] = classes[fdfa.transitions(i)[via]];
+      }
+
+      if(trans != mindfa.transitions(classes[i])) {
+        
+        for(size_t j = 0; j < classes.size(); ++j) {
+          if(classes[j] != classes[i]) continue;
+          if(trans == mindfa.transitions(classes[j])) {
+            new_classes[i] = new_classes[j];
+            break;
+          }
+        }
+
+        if(new_classes[i] == classes[i]) { // Not found
+          new_classes[i] = mindfa.size();
+          mindfa.create_node();
+          if(mindfa.isFinite(classes[i])) {
+            mindfa.makeFinite(new_classes[i]);
+          }
+          added_new_class = true;
+        }
+      }
+    }
+    classes.swap(new_classes);
+  }
+  return mindfa;
 }
 
 }  // namespace rgx
