@@ -6,8 +6,6 @@
 using namespace rgx;
 using Alphabet = SimpleAlphabet<2>;
 
-template class rgx::FDFA<Alphabet>;
-
 TEST(TEST_FDFA, TEST_SETDEL) {
   FDFA<Alphabet> fdfa;
   fdfa.create_node();

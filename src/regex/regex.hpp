@@ -429,6 +429,8 @@ class Regex {
   }
 
 public:
+  Regex() : impl(nullptr) {}
+
   explicit Regex(std::basic_string_view<typename Alphabet::CharT> str) : impl(RegexImpl<Alphabet>::FromString(str)), n_owns(new size_t(1)) {
     if(!impl) {
       throw std::runtime_error("Not a regex");
@@ -453,10 +455,8 @@ public:
   }
 
   Regex& operator=(Regex&& oth) {
-    impl   = oth.impl;
-    n_owns = oth.n_owns;
-    oth.impl   = nullptr;
-    oth.n_owns = nullptr;
+    std::swap(impl, oth.impl);
+    std::swap(n_owns, oth.n_owns);
     return *this;
   }
 
@@ -472,12 +472,19 @@ public:
   }
 
   static Regex SingeLetter(CharT chr) {
-    return Regex(new RegexLetter<Alphabet>(chr));
+    return Regex(new RegexLetter<Alphabet>(Alphabet::Ord(chr)));
   }
 
   const RegexImpl<Alphabet>* getImpl() const {return impl;}
 
   Regex& concat(Regex oth) {
+    if(!impl || mgk::isa<RegexEmpty<Alphabet>>(*impl)) {
+      return *this = std::move(oth);
+    }
+
+    if(mgk::isa<RegexEmpty<Alphabet>>(*oth.impl))
+      return *this;
+
     modify();
     oth.modify(); // Make oth single-owner;
 
@@ -495,6 +502,10 @@ public:
   }
 
   Regex& alternate(Regex oth) {
+    if(!impl) {
+      return *this = std::move(oth);
+    }
+
     modify();
     oth.modify(); // Make oth single-owner;
 
@@ -512,12 +523,14 @@ public:
   }
   
   Regex& kleene() {
+    assert(impl);
     modify();
     impl = new RegexQuantified<Alphabet>(impl, RegexImpl<Alphabet>::RK_Kleene);
     return *this;
   }
 
   Regex& optional() {
+    assert(impl);
     modify();
     impl = new RegexQuantified<Alphabet>(impl, RegexImpl<Alphabet>::RK_Optional);
     return *this;
@@ -526,7 +539,17 @@ public:
   // Shallow ==
   bool operator==(const Regex& other) const = default;
   bool operator!=(const Regex& other) const = default;
+
 };
+template<typename OStream, typename Alphabet>
+OStream& operator<<(OStream& out, const Regex<Alphabet>& rgx) {
+  if(!rgx.getImpl()) {
+    out << "\"\"";
+    return out;
+  }
+  out << *rgx.getImpl();
+  return out;
+}
 
 
 }  // namespace rgx

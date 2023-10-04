@@ -2,8 +2,6 @@
 
 #include "../alphabet.hpp"
 
-template struct rgx::SimpleAlphabet<2>;
-
 TEST(AlphabetTest, ALPH_CHR_TEST) {
   ASSERT_EQ(rgx::SimpleAlphabet<2>::Chr(1), 'a');
   ASSERT_EQ(rgx::SimpleAlphabet<2>::Chr(0), 0);

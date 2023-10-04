@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <fstream>
+#include <functional>
 #include <iostream>
 #include <iterator>
 #include <map>
@@ -16,66 +17,20 @@ namespace rgx {
 
 template <typename Alphabet>
 class NFSA {
-  using NodeT = std::size_t;
   using CharT = Alphabet::CharT;
-
  public:
-  class Node {
-    NodeT m_node;
-    explicit Node(NodeT node) : m_node(node) {}
-    friend NFSA;
-
-   public:
-    Node() = default;
-    operator uint64_t() const { return m_node; }
-    constexpr auto operator<=>(const Node& oth) const {
-      assert(m_node != ~0ul);
-      return m_node <=> oth.m_node;
-    }
-
-    constexpr bool operator==(const Node& oth) const = default;
-    constexpr bool operator!=(const Node& oth) const = default;
-    constexpr bool operator<=(const Node& oth) const = default;
-    constexpr bool operator>=(const Node& oth) const = default;
-    constexpr bool operator<(const Node& oth) const = default;
-    constexpr bool operator>(const Node& oth) const = default;
-  };
-
+  using Node = std::size_t;
  private:
-  std::set<NodeT> m_finite;
+  std::set<Node> m_finite;
   std::vector<std::map<uint64_t, std::vector<Node>>> m_transitions;
-  NodeT start_state = 0;
-  NodeT m_free_node = 1;
+  Node start_state = 0;
+  Node m_free_node = 1;
 
-  bool has_transition(NodeT from, uint64_t via, Node to) const {
-    if (m_transitions[from].find(via) == m_transitions[from].end()) {
-      return false;
-    }
-    return std::find(m_transitions[from].at(via).begin(),
-                     m_transitions[from].at(via).end(),
-                     to) != m_transitions[from].at(via).end();
-  }
-
-  void add_transition(NodeT from, uint64_t via, Node to) {
-    if (!has_transition(from, via, to)) {
-      m_transitions[from][via].push_back(to);
-    }
-  }
-
-  void remove_transition(NodeT from, uint64_t via, Node to) {
-    auto it = std::find(m_transitions[from][via].begin(),
-                        m_transitions[from][via].end(), to);
-    if (it != m_transitions[from][via].end()) {
-      std::swap(*m_transitions[from][via].rbegin(), *it);
-      m_transitions[from][via].pop_back();
-    }
-  }
-
+  
  public:
-  static const constexpr NodeT ErrorState = ~0ul;
-  static const constexpr uint64_t Epsilon =
-      0;  // Zero is terminator for strings so it will be good go NFA
-          // transition;
+  static const constexpr Node ErrorState = ~0ul;
+  static const constexpr uint64_t Epsilon = 0;  // Zero is terminator for strings so it will be good go NFA
+  static const constexpr uint64_t Invalid = ~0ul;
 
   NFSA() { m_transitions.emplace_back(); }
 
@@ -91,31 +46,62 @@ class NFSA {
 
   size_t size() const { return m_free_node; }
 
-  void makeFinite(Node node) { m_finite.insert(node.m_node); }
+  void makeFinite(Node node) { m_finite.insert(node); }
 
   bool isFinite(Node node) const {
-    return m_finite.find(node.m_node) != m_finite.end();
+    return m_finite.find(node) != m_finite.end();
   }
 
-  void removeFinite(Node node) { m_finite.erase(node.m_node); }
+  void removeFinite(Node node) { m_finite.erase(node); }
 
   Node start() const { return Node{start_state}; }
 
+  void setStart(Node st) { start_state = st; }
+
+  const std::map<uint64_t, std::vector<Node>>& transitions(Node from) const {
+    return m_transitions[from];
+  }
+
   bool has_transition(Node from, uint64_t via, Node to) const {
-    return has_transition(from.m_node, via, to);
+    assert(from < m_transitions.size());
+    if (m_transitions[from].find(via) == m_transitions[from].end()) {
+      return false;
+    }
+    return std::find(m_transitions[from].at(via).begin(),
+                     m_transitions[from].at(via).end(),
+                     to) != m_transitions[from].at(via).end();
   }
 
   void add_transition(Node from, uint64_t via, Node to) {
-    add_transition(from.m_node, via, to);
+    if (!has_transition(from, via, to)) {
+      m_transitions[from][via].push_back(to);
+    }
   }
 
   void remove_transition(Node from, uint64_t via, Node to) {
-    remove_transition(from.m_node, via, to);
+    auto it = std::find(m_transitions[from][via].begin(),
+                        m_transitions[from][via].end(), to);
+    if (it != m_transitions[from][via].end()) {
+      std::swap(*m_transitions[from][via].rbegin(), *it);
+      m_transitions[from][via].pop_back();
+    }
   }
 
-  const std::map<uint64_t, std::vector<Node>>& transitions(Node from) const {
-    return m_transitions[from.m_node];
+  uint64_t find_transition(Node from, Node to) {
+    for(const auto& [key, trans] : m_transitions[from]) {
+      for(uint64_t dest : trans) {
+        if(dest == to) {
+          return key;
+        }
+      }
+    }
+    return Invalid;
   }
+
+  void remove_transitions_from(Node from) {
+    m_transitions[from].clear();
+  }
+
 
   void concat(NFSA other);
   void alternate(NFSA other);
@@ -127,9 +113,10 @@ class NFSA {
     return Node{m_free_node++};
   }
 
-  void removeEpsilonTransitions();
+  NFSA& removeEpsilonTransitions();
 
   void optimizeUnreachable();
+  void optimizeUnreachableTerm();
 
   void graphDump(const char* filename) const;
 
@@ -137,7 +124,7 @@ class NFSA {
   OStream& textDump(OStream& out) const {
     out << start_state << '\n' << '\n';
 
-    for (NodeT node : m_finite) {
+    for (Node node : m_finite) {
       out << node << '\n';
     }
     out << "\n";
@@ -146,7 +133,7 @@ class NFSA {
       for (auto& [c, trans] : m_transitions[node]) {
         CharT chr = Alphabet::Chr(c);
         for (const Node& to : trans) {
-          out << node << ' ' << to.m_node << ' ';
+          out << node << ' ' << to << ' ';
           if (c != Epsilon) {
             if (Alphabet::NeedEscape(chr)) out << Alphabet::EscapeChar;
             out << chr << '\n';
@@ -163,12 +150,12 @@ template <typename Alphabet>
 void NFSA<Alphabet>::concat(NFSA<Alphabet> oth) {
   validate();
   oth.validate();
-  NodeT delta = size();
+  Node delta = size();
 
   for (auto& node : oth.m_transitions) {
     for (auto& [chr, trans] : node) {
       for (auto& to : trans) {
-        to.m_node += delta;
+        to += delta;
       }
     }
   }
@@ -180,13 +167,13 @@ void NFSA<Alphabet>::concat(NFSA<Alphabet> oth) {
 
   m_free_node += oth.size();
 
-  for (NodeT node : m_finite) {
+  for (Node node : m_finite) {
     add_transition(node, Epsilon, Node{oth.start_state});
   }
 
   m_finite.clear();
 
-  for (NodeT node : oth.m_finite) {
+  for (Node node : oth.m_finite) {
     m_finite.insert(node + delta);
   }
   validate();
@@ -197,11 +184,11 @@ void NFSA<Alphabet>::alternate(NFSA<Alphabet> oth) {
   validate();
   oth.validate();
 
-  NodeT delta = size();
+  Node delta = size();
   for (auto& node : oth.m_transitions) {
     for (auto& [chr, trans] : node) {
       for (auto& to : trans) {
-        to.m_node += delta;
+        to += delta;
       }
     }
   }
@@ -216,17 +203,17 @@ void NFSA<Alphabet>::alternate(NFSA<Alphabet> oth) {
   Node newStart = create_node();
   add_transition(newStart, Epsilon, start());
   add_transition(newStart, Epsilon, Node{oth.start_state});
-  start_state = newStart.m_node;
+  start_state = newStart;
 
   Node newTerm = create_node();
 
-  for (NodeT node : m_finite) {
+  for (Node node : m_finite) {
     add_transition(node, Epsilon, newTerm);
   }
 
   m_finite.clear();
 
-  for (NodeT node : oth.m_finite) {
+  for (Node node : oth.m_finite) {
     add_transition(node + delta, Epsilon, newTerm);
   }
 
@@ -240,11 +227,11 @@ void NFSA<Alphabet>::kleene() {
 
   add_transition(newStart, Epsilon, start());
 
-  for (NodeT node : m_finite) {
+  for (Node node : m_finite) {
     add_transition(node, Epsilon, newStart);
   }
 
-  start_state = newStart.m_node;
+  start_state = newStart;
   makeFinite(start());
   validate();
 }
@@ -254,7 +241,7 @@ void NFSA<Alphabet>::optional() {
   Node newStart = create_node();
 
   add_transition(newStart, Epsilon, start());
-  start_state = newStart.m_node;
+  start_state = newStart;
 
   makeFinite(start());
   validate();
@@ -276,7 +263,7 @@ void NFSA<Alphabet>::graphDump(const char* filename) const {
             "S [style = invis];"
             "node [shape = doublecircle];\n";
   if (!m_finite.empty()) {
-    for (NodeT node : m_finite) {
+    for (Node node : m_finite) {
       dotout << node << " ";
     }
 
@@ -289,7 +276,7 @@ void NFSA<Alphabet>::graphDump(const char* filename) const {
     for (auto& [c, trans] : m_transitions[node]) {
       CharT chr = Alphabet::Chr(c);
       for (const Node& to : trans) {
-        dotout << node << " -> " << to.m_node << "[label=\"";
+        dotout << node << " -> " << to << "[label=\"";
         if (c != Epsilon) {
           if (Alphabet::NeedEscape(chr)) dotout << Alphabet::EscapeChar;
           dotout << chr;
@@ -308,15 +295,15 @@ void NFSA<Alphabet>::graphDump(const char* filename) const {
 }
 
 template <typename Alphabet>
-void NFSA<Alphabet>::removeEpsilonTransitions() {
-  std::vector<NodeT> worklist;
-  std::set<NodeT> reachable;
+NFSA<Alphabet>& NFSA<Alphabet>::removeEpsilonTransitions() {
+  std::vector<Node> worklist;
+  std::set<Node> reachable;
   for (size_t node = 0; node < size(); ++node) {
     reachable.clear();
     worklist.push_back(node);
 
     while (!worklist.empty()) {
-      NodeT via = worklist.back();
+      Node via = worklist.back();
       worklist.pop_back();
 
       if (reachable.find(via) != reachable.end()) continue;
@@ -325,14 +312,14 @@ void NFSA<Alphabet>::removeEpsilonTransitions() {
 
       if (m_transitions[via].find(Epsilon) != m_transitions[via].end()) {
         for (Node to : m_transitions[via].at(Epsilon)) {
-          worklist.push_back(to.m_node);
+          worklist.push_back(to);
         }
       }
     }
 
     reachable.erase(node);
 
-    for (NodeT via : reachable) {
+    for (Node via : reachable) {
       if (m_finite.find(via) != m_finite.end()) {
         m_finite.insert(node);
       }
@@ -349,16 +336,17 @@ void NFSA<Alphabet>::removeEpsilonTransitions() {
   }
   optimizeUnreachable();
   validate();
+  return *this;
 }
 
 template <typename Alphabet>
 void NFSA<Alphabet>::optimizeUnreachable() {
   std::vector<bool> reachable(size(), false);
-  std::vector<NodeT> worklist;
+  std::vector<Node> worklist;
   worklist.push_back(start_state);
 
   while (!worklist.empty()) {
-    NodeT node = worklist.back();
+    Node node = worklist.back();
     worklist.pop_back();
 
     if (reachable[node]) continue;
@@ -367,7 +355,7 @@ void NFSA<Alphabet>::optimizeUnreachable() {
 
     for (auto& [chr, trans] : m_transitions[node]) {
       for (const Node& tp : trans) {
-        worklist.push_back(tp.m_node);
+        worklist.push_back(tp);
       }
     }
   }
@@ -376,6 +364,43 @@ void NFSA<Alphabet>::optimizeUnreachable() {
     if (!reachable[i]) {
       m_finite.erase(i);
       m_transitions[i].clear();
+    }
+  }
+}
+
+
+template <typename Alphabet>
+void NFSA<Alphabet>::optimizeUnreachableTerm() {
+  std::vector<bool> reachableTerm(size(), false);
+  std::vector<bool> visited(size(), false);
+
+  std::function<void(Node)> checkReachableTerm;
+  checkReachableTerm = [&, this] (Node node) {
+    if(reachableTerm[node]) return;
+    visited[node] = true;
+    if(isFinite(node)) {
+      reachableTerm[node] = true;
+      return;
+    }
+
+    for(auto& [key, tos] : m_transitions[node]) {
+      for(auto& to : tos) {
+        if(!visited[to]) checkReachableTerm(to);
+        if(reachableTerm[to]) {
+          reachableTerm[node] = true;
+          return;
+        }
+      }
+    }
+  };
+
+  for(size_t i = 0; i < size(); ++i) {
+    visited.assign(size(), false);
+    checkReachableTerm(i);
+  }
+  for(size_t i = 0; i < size(); ++i) {
+    for(auto& [key, tos] : m_transitions[i]) {
+        std::erase_if(tos, [&](Node node) {return !reachableTerm[node];});
     }
   }
 }

@@ -69,6 +69,10 @@ struct AnyAlphabet {
   using CharT = uint64_t;
   static constexpr CharT Chr(uint64_t x) { return x; }
   static constexpr uint64_t Ord(CharT chr) { return chr; }
+  static const constexpr CharT EscapeChar = ~0ul;
+  static constexpr bool NeedEscape(CharT) {
+    return false;
+  }
 };
 
 }  // namespace rgx

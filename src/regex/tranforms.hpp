@@ -127,7 +127,6 @@ FDFA<Alphabet> Minimize(const FDFA<Alphabet> fdfa) {
   mindfa.setStart(classes[0]);
 
   bool added_new_class = true;
-  size_t iter=0;
   while(added_new_class) {
     added_new_class = false;
     std::vector<uint64_t> new_classes = classes;
@@ -170,11 +169,141 @@ FDFA<Alphabet> Minimize(const FDFA<Alphabet> fdfa) {
         }
       }
     }
-    mindfa.graphDump((std::to_string(iter++)+".png").c_str());
     classes.swap(new_classes);
   }
   return mindfa;
 }
+
+template <typename Alphabet>
+Regex<Alphabet> RegexFromFDFA(const FDFA<Alphabet>& dfa) {
+  using Regex = Regex<Alphabet>;
+  std::vector<Regex> rgxAlphabet{};
+  rgxAlphabet.emplace_back(Regex::EmptyString());
+
+  for(size_t i = 1; i < Alphabet::Size; ++i) {
+    rgxAlphabet.emplace_back(Regex::SingeLetter(Alphabet::Chr(i)));
+  }
+
+  auto RegexNum = [&rgxAlphabet] (const Regex& regex) -> uint64_t  {
+    for(size_t i = 0; i < rgxAlphabet.size(); ++i) {
+      if(rgxAlphabet[i] == regex) return i;
+    }
+    rgxAlphabet.emplace_back(regex);
+    return rgxAlphabet.size()-1;
+  };
+
+
+  NFSA<AnyAlphabet> regexNFA{};
+
+  for(size_t i = 1; i < dfa.size(); ++i) {
+    regexNFA.create_node();
+  }
+
+  for(size_t from = 0; from < dfa.size(); ++from) {
+    for(uint64_t via = 1; via < dfa.transitions(from).size(); ++via) {
+      regexNFA.add_transition(from, via, dfa.transitions(from)[via]);
+    }
+  }
+
+  regexNFA.setStart(dfa.start());
+  auto term = regexNFA.create_node();
+  regexNFA.makeFinite(term);
+  for(size_t x = 0; x < dfa.size(); ++x) {
+    if(dfa.isFinite(x)) {
+      regexNFA.add_transition(x, 0, term);
+    }
+  }
+
+  regexNFA.optimizeUnreachableTerm();
+
+  std::vector<std::vector<std::pair<uint64_t, uint64_t>>> reverse_transitions(regexNFA.size());
+  std::vector<std::vector<uint64_t>> loops(regexNFA.size());
+
+  for(size_t i = 0; i < regexNFA.size(); ++i) {
+    for(const auto& [key, trans] : regexNFA.transitions(i)) {
+      for(uint64_t to : trans) {
+        if(to == i) {
+          loops[i].push_back(key);
+        }
+        else {
+          reverse_transitions[to].push_back({key, i});
+        }
+      }
+    }
+  }
+
+  for(uint64_t via = 0; via < regexNFA.size(); ++via) {
+    if(via == regexNFA.start() || regexNFA.isFinite(via))
+      continue;
+
+    Regex loopRegex;
+    bool hasLoop = !loops[via].empty();
+    if(hasLoop) {
+      for(uint64_t r : loops[via]) {
+        loopRegex.alternate(rgxAlphabet[r]);
+      }
+      loopRegex.kleene();
+    }
+
+    for(auto [fromChr, from] : reverse_transitions[via]) {
+      assert(from != via);
+      if(from < via && from != regexNFA.start()) continue;
+      for(const auto& [toChr, tos] : regexNFA.transitions(via)) {
+        for(auto to : tos) {
+          if(to == via)
+            continue;
+          assert(to > via || to == regexNFA.start());
+          Regex combo = rgxAlphabet[fromChr];
+          if(hasLoop) {
+            combo.concat(loopRegex);
+          }
+          combo.concat(rgxAlphabet[toChr]);
+
+          if(to != from) {
+            bool changed = false;
+            do {
+              changed = false;
+              uint64_t letter = regexNFA.find_transition(from, to);
+              if(letter != NFSA<AnyAlphabet>::Invalid) {
+                regexNFA.remove_transition(from, letter, to);
+                combo.alternate(rgxAlphabet[letter]);
+                changed = true;
+              }
+            } while(changed);
+            std::erase_if(reverse_transitions[to], [=](const std::pair<uint64_t, uint64_t>& x) {return x.second == from;});
+          }
+
+          uint64_t regexNum = RegexNum(std::move(combo));
+
+          regexNFA.add_transition(from, regexNum, to);
+          if(to == from) {
+            loops[to].push_back(regexNum);
+          } else {
+            reverse_transitions[to].push_back({regexNum, from});
+          }
+        }
+      }
+    }
+    regexNFA.remove_transitions_from(via);
+  }
+
+  Regex finalRegex;
+  bool hasLoop = !loops[regexNFA.start()].empty();
+  if(hasLoop) {
+    for(uint64_t r : loops[regexNFA.start()]) {
+      finalRegex.alternate(rgxAlphabet[r]);
+    }
+    finalRegex.kleene();
+  }
+  uint64_t trans = regexNFA.find_transition(regexNFA.start(), term);
+  finalRegex.concat(std::move(rgxAlphabet[trans]));
+  return std::move(finalRegex);
+}
+
+template<typename Alphabet>
+FDFA<Alphabet> MDFAFromRegex(Regex<Alphabet> rgx) {
+  return Minimize(FDFAFromNFA(NFAFromRegex(rgx).removeEpsilonTransitions()));
+} 
 
 }  // namespace rgx
 

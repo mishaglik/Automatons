@@ -6,8 +6,6 @@
 using namespace rgx;
 using Alphabet = SimpleAlphabet<2>;
 
-template class rgx::NFSA<Alphabet>;
-
 TEST(TEST_NFSA, TEST_SETDEL) {
   NFSA<Alphabet> nfsa;
   auto node = nfsa.create_node();
