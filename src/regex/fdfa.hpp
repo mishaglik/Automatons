@@ -17,78 +17,78 @@ namespace rgx {
 template <typename Alphabet>
 class FDFA {
   using Node = std::size_t;
-  using CharT = Alphabet::CharT;
-  Node start_state = 0;
-  std::vector<std::array<Node, Alphabet::Size>> m_transitions;
-  std::set<Node> m_finite;
+  using CharT = typename Alphabet::CharT;
+  Node start_state_ = 0;
+  std::vector<std::array<Node, Alphabet::kSize>> transitions_;
+  std::set<Node> finite_;
 
  public:
-  static const constexpr Node ErrorState = ~0ul;
-  static const constexpr uint64_t Epsilon = 0;
+  static const constexpr Node kErrorState = ~0ul;
+  static const constexpr uint64_t kEpsilon = 0;
 
   FDFA() {
-    m_transitions.emplace_back();
-    m_transitions.back().fill(ErrorState);
+    transitions_.emplace_back();
+    transitions_.back().fill(kErrorState);
   }
 
-  size_t size() const { return m_transitions.size(); }
+  size_t Size() const { return transitions_.size(); }
 
-  void makeFinite(Node node) { m_finite.insert(node); }
+  void MakeFinite(Node node) { finite_.insert(node); }
 
-  bool isFinite(Node node) const {
-    return m_finite.find(node) != m_finite.end();
+  bool IsFinite(Node node) const { return finite_.find(node) != finite_.end(); }
+
+  void RemoveFinite(Node node) { finite_.erase(node); }
+
+  Node Start() const { return start_state_; }
+
+  void SetStart(Node node) { start_state_ = node; }
+
+  bool HasTransition(Node from, uint64_t via, Node to) const {
+    assert(from < Size());
+    return transitions_[from][via] == to;
   }
 
-  void removeFinite(Node node) { m_finite.erase(node); }
-
-  Node start() const { return start_state; }
-
-  void setStart(Node node) { start_state = node; }
-
-  bool has_transition(Node from, uint64_t via, Node to) const {
-    assert(from < size());
-    return m_transitions[from][via] == to;
+  void RemoveTransition(Node from, uint64_t via) {
+    assert(from < Size());
+    transitions_[from][via] = kErrorState;
   }
 
-  void remove_transition(Node from, uint64_t via) {
-    assert(from < size());
-    m_transitions[from][via] = ErrorState;
+  void SetTransition(Node from, uint64_t via, Node to) {
+    assert(from < Size());
+    transitions_[from][via] = to;
   }
 
-  void set_transition(Node from, uint64_t via, Node to) {
-    assert(from < size());
-    m_transitions[from][via] = to;
+  const std::array<Node, Alphabet::kSize>& Transitions(Node from) const {
+    assert(from < Size());
+    return transitions_[from];
   }
 
-  const std::array<Node, Alphabet::Size>& transitions(Node from) const {
-    assert(from < size());
-    return m_transitions[from];
+  Node CreateNode() {
+    transitions_.emplace_back();
+    transitions_.back().fill(kErrorState);
+    return transitions_.size() - 1;
   }
 
-  Node create_node() {
-    m_transitions.emplace_back();
-    m_transitions.back().fill(ErrorState);
-    return m_transitions.size() - 1;
-  }
-
-  void graphDump(const char* filename) const;
+  void GraphDump(const char* filename) const;
 
   template <typename OStream>
-  OStream& textDump(OStream& out) const {
-    out << start_state << '\n' << '\n';
+  OStream& TextDump(OStream& out) const {
+    out << start_state_ << '\n' << '\n';
 
-    for (Node node : m_finite) {
+    for (Node node : finite_) {
       out << node << '\n';
     }
     out << "\n";
 
-    for (size_t node = 0; node < size(); ++node) {
-      for (uint64_t c = 1; c < Alphabet::Size; ++c) {
-        Node to = m_transitions[node][c];
+    for (size_t node = 0; node < Size(); ++node) {
+      for (uint64_t c = 1; c < Alphabet::kSize; ++c) {
+        Node to = transitions_[node][c];
         CharT chr = Alphabet::Chr(c);
-        if (to != ErrorState) {
+        if (to != kErrorState) {
           out << node << ' ' << to << ' ';
-          if (Alphabet::NeedEscape(chr)) out << Alphabet::EscapeChar;
+          if (Alphabet::NeedEscape(chr)) {
+            out << Alphabet::kEscapeChar;
+          }
           out << chr << '\n';
         }
       }
@@ -98,17 +98,19 @@ class FDFA {
     return out;
   }
 
-  void inverse() {
+  void Inverse() {
     std::set<Node> new_finite = {};
-    for (size_t i = 0; i < size(); ++i) {
-      if (!isFinite(i)) new_finite.insert(i);
+    for (size_t i = 0; i < Size(); ++i) {
+      if (!IsFinite(i)) {
+        new_finite.insert(i);
+      }
     }
-    m_finite.swap(new_finite);
+    finite_.swap(new_finite);
   }
 };
 
 template <typename Alphabet>
-void FDFA<Alphabet>::graphDump(const char* filename) const {
+void FDFA<Alphabet>::GraphDump(const char* filename) const {
   std::string tmp_name = "/tmp/";
   tmp_name += filename;
   tmp_name += ".dot";
@@ -122,23 +124,25 @@ void FDFA<Alphabet>::graphDump(const char* filename) const {
             "rankdir=LR;\n"
             "S [style = invis];"
             "node [shape = doublecircle];\n";
-  if (!m_finite.empty()) {
-    for (Node node : m_finite) {
+  if (!finite_.empty()) {
+    for (Node node : finite_) {
       dotout << node << " ";
     }
 
     dotout << ";\n";
   }
   dotout << "node [shape = circle];\n";
-  dotout << "S -> " << start_state << '\n';
+  dotout << "S -> " << start_state_ << '\n';
 
-  for (size_t node = 0; node < size(); ++node) {
-    for (uint64_t c = 1; c < Alphabet::Size; ++c) {
-      Node to = m_transitions[node][c];
+  for (size_t node = 0; node < Size(); ++node) {
+    for (uint64_t c = 1; c < Alphabet::kSize; ++c) {
+      Node to = transitions_[node][c];
       CharT chr = Alphabet::Chr(c);
-      if (to != ErrorState) {
+      if (to != kErrorState) {
         dotout << node << " -> " << to << "[label=\"";
-        if (Alphabet::NeedEscape(chr)) dotout << Alphabet::EscapeChar;
+        if (Alphabet::NeedEscape(chr)) {
+          dotout << Alphabet::kEscapeChar;
+        }
         dotout << chr;
         dotout << "\"];\n";
       }
@@ -155,4 +159,3 @@ void FDFA<Alphabet>::graphDump(const char* filename) const {
 }  // namespace rgx
 
 #endif /* REGEX_FDFA_HPP */
-    

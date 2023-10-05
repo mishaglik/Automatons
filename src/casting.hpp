@@ -7,36 +7,36 @@
 namespace mgk {
 
 template <class To, class From>
-bool isa(const From& obj) {
-  return To::classof(&obj);
+bool Isa(const From& obj) {
+  return To::Classof(&obj);
 }
 
 template <class To, class From>
-bool isa(const From* obj) {
-  return To::classof(obj);
+bool Isa(const From* obj) {
+  return To::Classof(obj);
 }
 
 template <class To, class From>
-To* cast(From& obj) {
-  assert(isa<To>(obj));
+To* Cast(From& obj) {
+  assert(Isa<To>(obj));
   return static_cast<To*>(&obj);
 }
 
 template <class To, class From>
-To* cast(From* obj) {
-  assert((isa<To, From>(obj)));
+To* Cast(From* obj) {
+  assert((Isa<To, From>(obj)));
   return static_cast<To*>(obj);
 }
 
 template <class To, class From>
-const To* cast(const From* obj) {
-  assert((isa<To, From>(obj)));
+const To* Cast(const From* obj) {
+  assert((Isa<To, From>(obj)));
   return static_cast<const To*>(obj);
 }
 
 template <class To, class From>
-const To* cast(const From& obj) {
-  assert((isa<To, From>(obj)));
+const To* Cast(const From& obj) {
+  assert((Isa<To, From>(obj)));
   return static_cast<const To*>(&obj);
 }
 

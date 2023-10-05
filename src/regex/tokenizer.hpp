@@ -9,7 +9,7 @@ namespace rgx {
 
 template <typename Alphabet>
 struct RegexToken {
-  using CharT = Alphabet::CharT;
+  using CharT = typename Alphabet::CharT;
   enum class Type {
     Error = 0,
     EOL,
@@ -26,13 +26,15 @@ struct RegexToken {
   uint64_t chr = 0;  // Valid only when type == Letter
 
   bool operator==(const RegexToken& oth) const {
-    if (type != oth.type) return false;
+    if (type != oth.type) {
+      return false;
+    }
     return (type != Type::Letter) || chr == oth.chr;
   }
 
   bool operator!=(const RegexToken& oth) const = default;
 
-  operator bool() const { return type != Type::Error; }
+  explicit operator bool() const { return type != Type::Error; }
 };
 
 template <typename Alphabet>
@@ -41,121 +43,120 @@ class Tokenizer;
 template <typename Alphabet>
 class TokenIterator {
  public:
-  using CharT = Alphabet::CharT;
+  using CharT = typename Alphabet::CharT;
   using Token = RegexToken<Alphabet>;
 
  private:
   friend class Tokenizer<Alphabet>;
-  std::basic_string_view<CharT> m_str;
-  std::size_t m_pos = 0;
-  Token m_token = {Token::Type::EOL};
+  std::basic_string_view<CharT> str_;
+  std::size_t pos_ = 0;
+  Token token_ = {Token::Type::EOL};
 
-  TokenIterator(std::basic_string_view<CharT> str, bool end = false)
-      : m_str(str) {
+  explicit TokenIterator(std::basic_string_view<CharT> str, bool end = false)
+      : str_(str) {
     if (end) {
-      m_pos = m_str.length();
+      pos_ = str_.length();
     }
-    getNextToken();
+    GetNextToken();
   }
 
-  void skipSpaces() {
-    while (m_pos < m_str.length() && Alphabet::IsSpace(m_str[m_pos])) {
-      m_pos++;
+  void SkipSpaces() {
+    while (pos_ < str_.length() && Alphabet::IsSpace(str_[pos_])) {
+      pos_++;
     }
   }
 
-  void getNextToken() {
-    skipSpaces();
+  void GetNextToken() {
+    SkipSpaces();
 
-    if (m_pos >= m_str.length()) {
-      m_token = RegexToken<Alphabet>{Token::Type::EOL};
+    if (pos_ >= str_.length()) {
+      token_ = RegexToken<Alphabet>{Token::Type::EOL};
       return;
     }
 
-    if (m_str[m_pos] == Alphabet::EscapeChar) {
-      if (m_pos + 1 >= m_str.length()) {
-        m_token.type = Token::Type::Error;
+    if (str_[pos_] == Alphabet::kEscapeChar) {
+      if (pos_ + 1 >= str_.length()) {
+        token_.type = Token::Type::Error;
         return;
       }
 
-      uint64_t chr = Alphabet::Ord(m_str[++m_pos]);
-      if (chr == Alphabet::ErrorChr) {
-        m_token = {Token::Type::Error};
+      uint64_t chr = Alphabet::Ord(str_[++pos_]);
+      if (chr == Alphabet::kErrorChr) {
+        token_ = {Token::Type::Error};
 
       } else {
-        m_token = {Token::Type::Letter, chr};
+        token_ = {Token::Type::Letter, chr};
       }
-      m_pos++;
+      pos_++;
       return;
     }
 
-    if (m_str[m_pos] == Alphabet::Star) {
-      m_token.type = Token::Type::KleeneStar;
-      m_pos++;
+    if (str_[pos_] == Alphabet::kStar) {
+      token_.type = Token::Type::KleeneStar;
+      pos_++;
       return;
     }
 
-    if (m_str[m_pos] == Alphabet::QuestionMark) {
-      m_token.type = Token::Type::QuestionMark;
-      m_pos++;
+    if (str_[pos_] == Alphabet::kQuestionMark) {
+      token_.type = Token::Type::QuestionMark;
+      pos_++;
       return;
     }
 
-    if (m_str[m_pos] == Alphabet::Plus) {
-      m_token.type = Token::Type::Alternate;
-      m_pos++;
+    if (str_[pos_] == Alphabet::kPlus) {
+      token_.type = Token::Type::Alternate;
+      pos_++;
       return;
     }
 
-    if (m_str[m_pos] == Alphabet::LBracket) {
-      m_token.type = Token::Type::LBracket;
-      m_pos++;
+    if (str_[pos_] == Alphabet::kLBracket) {
+      token_.type = Token::Type::LBracket;
+      pos_++;
       return;
     }
 
-    if (m_str[m_pos] == Alphabet::RBracket) {
-      m_token.type = Token::Type::RBracket;
-      m_pos++;
+    if (str_[pos_] == Alphabet::kRBracket) {
+      token_.type = Token::Type::RBracket;
+      pos_++;
       return;
     }
 
-    if (m_str[m_pos] == Alphabet::EmptyWord) {
-      m_token.type = Token::Type::Empty;
-      m_pos++;
+    if (str_[pos_] == Alphabet::kEmptyWord) {
+      token_.type = Token::Type::Empty;
+      pos_++;
       return;
     }
 
-    uint64_t chr = Alphabet::Ord(m_str[m_pos++]);
-    if (chr == Alphabet::ErrorChr) {
-      m_token = {Token::Type::Error};
+    uint64_t chr = Alphabet::Ord(str_[pos_++]);
+    if (chr == Alphabet::kErrorChr) {
+      token_ = {Token::Type::Error};
 
     } else {
-      m_token = {Token::Type::Letter, chr};
+      token_ = {Token::Type::Letter, chr};
     }
-    return;
   }
 
  public:
   TokenIterator(const TokenIterator&) = default;
   TokenIterator& operator=(const TokenIterator&) = default;
 
-  const Token& operator*() const { return m_token; }
-  const Token* operator->() const { return &m_token; }
+  const Token& operator*() const { return token_; }
+  const Token* operator->() const { return &token_; }
 
   TokenIterator& operator++() {
-    getNextToken();
+    GetNextToken();
     return *this;
   }
 
   TokenIterator operator++(int) {
     TokenIterator copy = *this;
-    getNextToken();
+    GetNextToken();
     return copy;
   }
 
   bool operator==(const TokenIterator& oth) const {
-    assert(m_str.data() == oth.m_str.data());
-    return m_pos == oth.m_pos;
+    assert(str_.data() == oth.str_.data());
+    return pos_ == oth.pos_;
   }
 
   bool operator!=(const TokenIterator& oth) const = default;
@@ -163,19 +164,20 @@ class TokenIterator {
 
 template <typename Alphabet>
 class Tokenizer {
-  using CharT = Alphabet::CharT;
-  std::basic_string_view<CharT> m_str;
+  using CharT = typename Alphabet::CharT;
+  std::basic_string_view<CharT> str_;
 
  public:
-  Tokenizer(std::basic_string_view<CharT> str) : m_str(str) {}
-
+  explicit Tokenizer(std::basic_string_view<CharT> str) : str_(str) {}
+  // NOLINTBEGIN
   TokenIterator<Alphabet> begin() const {
-    return TokenIterator<Alphabet>(m_str, false);
+    return TokenIterator<Alphabet>(str_, false);
   }
 
   TokenIterator<Alphabet> end() const {
-    return TokenIterator<Alphabet>(m_str, true);
+    return TokenIterator<Alphabet>(str_, true);
   }
+  // NOLINTEND
 };
 
 }  // namespace rgx

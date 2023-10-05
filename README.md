@@ -17,14 +17,14 @@ int main() {
     std::string s1 = "(ab+ba)*(_+a+ba)";
     auto regex = rgx::Regex<rgx::SimpleAlphabet<2>>(s1);
     auto nfa = rgx::NFAFromRegex(rgx);
-    nfa.removeEpsilonTransitions();
-    nfa.graphDump("NoEps.png");
+    nfa.RemoveEpsilonTransitions();
+    nfa.GraphDump("NoEps.png");
     auto dfa = rgx::FDFAFromNFA(nfa);
-    dfa.graphDump("dfa.png");
-    dfa.inverse();
-    dfa.graphDump("dfaInverse.png");
+    dfa.GraphDump("dfa.png");
+    dfa.Inverse();
+    dfa.GraphDump("dfaInverse.png");
     dfa = rgx::Minimize(dfa);
-    dfa.graphDump("MinA.png");
+    dfa.GraphDump("MinA.png");
     auto invrgx = rgx::RegexFromFDFA(dfa);
     std::cout << invrgx << '\n';
 }

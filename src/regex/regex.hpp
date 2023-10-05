@@ -18,7 +18,7 @@
 
 namespace rgx {
 
-template<typename Alphabet>
+template <typename Alphabet>
 class Regex;
 
 template <typename Alphabet>
@@ -35,19 +35,20 @@ class RegexImpl {
   };
 
  protected:
-  RegexImpl(RegexKind kind) : Kind(kind) {}
+  explicit RegexImpl(RegexKind kind) : kind_(kind) {}
 
+ public:
   // Non copyable
   RegexImpl(const RegexImpl&) = delete;
   RegexImpl& operator=(const RegexImpl&) = delete;
 
  private:
-  const RegexKind Kind;
+  const RegexKind kind_;
 
  public:
-  RegexKind getKind() const { return Kind; }
+  RegexKind GetKind() const { return kind_; }
 
-  virtual ~RegexImpl() { assert(Kind <= RK_Alternate); };
+  virtual ~RegexImpl() { assert(kind_ <= RK_Alternate); };
 
   static RegexImpl* FromString(std::basic_string_view<CharT> str) {
     Tokenizer<Alphabet> tokenizer{str};
@@ -63,7 +64,8 @@ class RegexImpl {
   }
 
   virtual RegexImpl* Copy() const {
-    assert(0 && "Copying bare regex");
+    assert(false && "Copying bare regex");
+    return nullptr;
   }
 
  protected:
@@ -73,17 +75,18 @@ class RegexImpl {
 template <typename Alphabet>
 class RegexLetter : public RegexImpl<Alphabet> {
   friend class Regex<Alphabet>;
-  uint64_t m_letter;
-  RegexLetter(uint64_t letter)
-      : RegexImpl<Alphabet>(RegexImpl<Alphabet>::RK_Letter), m_letter(letter) {}
+  uint64_t m_letter_;
+  explicit RegexLetter(uint64_t letter)
+      : RegexImpl<Alphabet>(RegexImpl<Alphabet>::RK_Letter),
+        m_letter_(letter) {}
 
  public:
-  Alphabet::CharT getLetterChr() const { return Alphabet::Chr(m_letter); }
+  Alphabet::CharT GetLetterChr() const { return Alphabet::Chr(m_letter_); }
 
-  ~RegexLetter() override {}
+  ~RegexLetter() override = default;
 
-  static bool classof(const RegexImpl<Alphabet>* regex) {
-    return !regex || regex->getKind() == RegexImpl<Alphabet>::RK_Letter;
+  static bool Classof(const RegexImpl<Alphabet>* regex) {
+    return !regex || regex->GetKind() == RegexImpl<Alphabet>::RK_Letter;
   }
 
   static RegexImpl<Alphabet>* FromString(TokenIterator<Alphabet>& it) {
@@ -95,10 +98,7 @@ class RegexLetter : public RegexImpl<Alphabet> {
     return nullptr;
   }
 
-  RegexLetter* Copy() const override{
-    return new RegexLetter(m_letter);
-  }
-
+  RegexLetter* Copy() const override { return new RegexLetter(m_letter_); }
 };
 
 template <typename Alphabet>
@@ -107,10 +107,10 @@ class RegexEmpty : public RegexImpl<Alphabet> {
   RegexEmpty() : RegexImpl<Alphabet>(RegexImpl<Alphabet>::RK_Empty) {}
 
  public:
-  ~RegexEmpty() override {}
+  ~RegexEmpty() override = default;
 
-  static bool classof(const RegexImpl<Alphabet>* regex) {
-    return !regex || regex->getKind() == RegexImpl<Alphabet>::RK_Empty;
+  static bool Classof(const RegexImpl<Alphabet>* regex) {
+    return !regex || regex->GetKind() == RegexImpl<Alphabet>::RK_Empty;
   }
 
   static RegexImpl<Alphabet>* FromString(TokenIterator<Alphabet>& it) {
@@ -122,24 +122,23 @@ class RegexEmpty : public RegexImpl<Alphabet> {
     return nullptr;
   }
 
-  RegexEmpty* Copy() const override{
-    return new RegexEmpty;
-  }
+  RegexEmpty* Copy() const override { return new RegexEmpty; }
 };
 
 template <typename Alphabet>
 class RegexSimple : public RegexImpl<Alphabet> {
   friend class Regex<Alphabet>;
+
  public:
   static RegexImpl<Alphabet>* FromString(TokenIterator<Alphabet>& it) {
     if (it->type == RegexToken<Alphabet>::Type::LBracket) {
-      TokenIterator<Alphabet> backupIt = it;
+      TokenIterator<Alphabet> backup_it = it;
       ++it;
       RegexImpl<Alphabet>* regex = RegexImpl<Alphabet>::FromString(it);
 
       if (it->type != RegexToken<Alphabet>::Type::RBracket) {
         delete regex;
-        it = backupIt;
+        it = backup_it;
         return nullptr;
       }
 
@@ -158,21 +157,21 @@ class RegexSimple : public RegexImpl<Alphabet> {
 template <typename Alphabet>
 class RegexQuantified : public RegexImpl<Alphabet> {
   friend class Regex<Alphabet>;
-  RegexImpl<Alphabet>* m_regex;
+  RegexImpl<Alphabet>* m_regex_;
   RegexQuantified(RegexImpl<Alphabet>* regex,
                   typename RegexImpl<Alphabet>::RegexKind kind)
-      : RegexImpl<Alphabet>(kind), m_regex(regex) {
-    assert(classof(this));
+      : RegexImpl<Alphabet>(kind), m_regex_(regex) {
+    assert(Classof(this));
   }
 
  public:
-  const RegexImpl<Alphabet>* getSubregex() const { return m_regex; }
+  const RegexImpl<Alphabet>* GetSubregex() const { return m_regex_; }
 
-  ~RegexQuantified() override { delete m_regex; }
+  ~RegexQuantified() override { delete m_regex_; }
 
-  static bool classof(const RegexImpl<Alphabet>* regex) {
-    return !regex || regex->getKind() == RegexImpl<Alphabet>::RK_Kleene ||
-           regex->getKind() == RegexImpl<Alphabet>::RK_Optional;
+  static bool Classof(const RegexImpl<Alphabet>* regex) {
+    return !regex || regex->GetKind() == RegexImpl<Alphabet>::RK_Kleene ||
+           regex->GetKind() == RegexImpl<Alphabet>::RK_Optional;
   }
 
   static RegexImpl<Alphabet>* FromString(TokenIterator<Alphabet>& it) {
@@ -197,26 +196,31 @@ class RegexQuantified : public RegexImpl<Alphabet> {
   }
 
   RegexQuantified* Copy() const override {
-    return new RegexQuantified(m_regex->Copy(), this->getKind());
+    return new RegexQuantified(m_regex_->Copy(), this->GetKind());
   }
 };
 
 template <typename Alphabet>
 class RegexConcatenate : public RegexImpl<Alphabet> {
   friend class Regex<Alphabet>;
-  std::vector<RegexImpl<Alphabet>*> m_regexs;
-  RegexConcatenate() : RegexImpl<Alphabet>(RegexImpl<Alphabet>::RK_Concatenate) {}
+  std::vector<RegexImpl<Alphabet>*> regex_;
+  RegexConcatenate()
+      : RegexImpl<Alphabet>(RegexImpl<Alphabet>::RK_Concatenate) {}
 
  public:
-  const std::vector<RegexImpl<Alphabet>*>& getSubregex() const { return m_regexs; }
-        std::vector<RegexImpl<Alphabet>*>& getSubregex()       { return m_regexs; }
+  const std::vector<RegexImpl<Alphabet>*>& GetSubregex() const {
+    return regex_;
+  }
+  std::vector<RegexImpl<Alphabet>*>& GetSubregex() { return regex_; }
 
   ~RegexConcatenate() override {
-    for (auto m_regex : m_regexs) delete m_regex;
+    for (auto m_regex : regex_) {
+      delete m_regex;
+    }
   }
 
-  static bool classof(const RegexImpl<Alphabet>* regex) {
-    return !regex || regex->getKind() == RegexImpl<Alphabet>::RK_Concatenate;
+  static bool Classof(const RegexImpl<Alphabet>* regex) {
+    return !regex || regex->GetKind() == RegexImpl<Alphabet>::RK_Concatenate;
   }
 
   static RegexImpl<Alphabet>* FromString(TokenIterator<Alphabet>& it) {
@@ -237,12 +241,12 @@ class RegexConcatenate : public RegexImpl<Alphabet> {
 
     backup = it;
     auto* rgx = new RegexConcatenate<Alphabet>;
-    rgx->m_regexs.push_back(regex1);
-    rgx->m_regexs.push_back(regex2);
+    rgx->regex_.push_back(regex1);
+    rgx->regex_.push_back(regex2);
 
-    while (RegexImpl<Alphabet>* subRegex =
+    while (RegexImpl<Alphabet>* sub_regex =
                RegexQuantified<Alphabet>::FromString(it)) {
-      rgx->m_regexs.push_back(subRegex);
+      rgx->regex_.push_back(sub_regex);
       backup = it;
     }
 
@@ -252,8 +256,8 @@ class RegexConcatenate : public RegexImpl<Alphabet> {
 
   RegexConcatenate* Copy() const override {
     auto* copy = new RegexConcatenate();
-    for(auto* sub : m_regexs) {
-      copy->m_regexs.push_back(sub->Copy());
+    for (auto* sub : regex_) {
+      copy->regex_.push_back(sub->Copy());
     }
     return copy;
   }
@@ -262,19 +266,23 @@ class RegexConcatenate : public RegexImpl<Alphabet> {
 template <typename Alphabet>
 class RegexAlternate : public RegexImpl<Alphabet> {
   friend class Regex<Alphabet>;
-  std::vector<RegexImpl<Alphabet>*> m_regexs;
+  std::vector<RegexImpl<Alphabet>*> regex_;
   RegexAlternate() : RegexImpl<Alphabet>(RegexImpl<Alphabet>::RK_Alternate) {}
 
  public:
-  const std::vector<RegexImpl<Alphabet>*>& getSubregex() const { return m_regexs; }
-        std::vector<RegexImpl<Alphabet>*>& getSubregex()       { return m_regexs; }
+  const std::vector<RegexImpl<Alphabet>*>& GetSubregex() const {
+    return regex_;
+  }
+  std::vector<RegexImpl<Alphabet>*>& GetSubregex() { return regex_; }
 
   ~RegexAlternate() override {
-    for (auto m_regex : m_regexs) delete m_regex;
+    for (auto m_regex : regex_) {
+      delete m_regex;
+    }
   }
 
-  static bool classof(const RegexImpl<Alphabet>* regex) {
-    return !regex || regex->getKind() == RegexImpl<Alphabet>::RK_Alternate;
+  static bool Classof(const RegexImpl<Alphabet>* regex) {
+    return !regex || regex->GetKind() == RegexImpl<Alphabet>::RK_Alternate;
   }
 
   static RegexImpl<Alphabet>* FromString(TokenIterator<Alphabet>& it) {
@@ -292,15 +300,18 @@ class RegexAlternate : public RegexImpl<Alphabet> {
     }
 
     auto* rgx = new RegexAlternate<Alphabet>;
-    rgx->m_regexs.push_back(regex1);
+    rgx->regex_.push_back(regex1);
 
     while (it->type == RegexToken<Alphabet>::Type::Alternate) {
       ++it;
-      RegexImpl<Alphabet>* subRegex = RegexConcatenate<Alphabet>::FromString(it);
+      RegexImpl<Alphabet>* sub_regex =
+          RegexConcatenate<Alphabet>::FromString(it);
 
-      if (!subRegex) break;
+      if (!sub_regex) {
+        break;
+      }
 
-      rgx->m_regexs.push_back(subRegex);
+      rgx->regex_.push_back(sub_regex);
       backup = it;
     }
 
@@ -308,18 +319,18 @@ class RegexAlternate : public RegexImpl<Alphabet> {
     return rgx;
   }
 
-
   RegexAlternate* Copy() const override {
     auto* copy = new RegexAlternate();
-    for(auto* sub : m_regexs) {
-      copy->m_regexs.push_back(sub->Copy());
+    for (auto* sub : regex_) {
+      copy->regex_.push_back(sub->Copy());
     }
     return copy;
   }
 };
 
 template <typename Alphabet>
-RegexImpl<Alphabet>* RegexImpl<Alphabet>::FromString(TokenIterator<Alphabet>& it) {
+RegexImpl<Alphabet>* RegexImpl<Alphabet>::FromString(
+    TokenIterator<Alphabet>& it) {
   return RegexAlternate<Alphabet>::FromString(it);
 }
 
@@ -328,9 +339,9 @@ OStream& operator<<(OStream& out, const RegexImpl<Alphabet>& rgx);
 
 template <class OStream, typename Alphabet>
 OStream& operator<<(OStream& out, const RegexLetter<Alphabet>& rgx) {
-  typename Alphabet::CharT letter = rgx.getLetterChr();
+  typename Alphabet::CharT letter = rgx.GetLetterChr();
   if (Alphabet::NeedEscape(letter)) {
-    out << Alphabet::EscapeChar;
+    out << Alphabet::kEscapeChar;
   }
   out << letter;
   return out;
@@ -338,30 +349,31 @@ OStream& operator<<(OStream& out, const RegexLetter<Alphabet>& rgx) {
 
 template <class OStream, typename Alphabet>
 OStream& operator<<(OStream& out, const RegexQuantified<Alphabet>& rgx) {
-  if (rgx.getSubregex()->getKind() >= rgx.getKind()) {
-    out << Alphabet::LBracket;
+  if (rgx.GetSubregex()->GetKind() >= rgx.GetKind()) {
+    out << Alphabet::kLBracket;
   }
 
-  out << *rgx.getSubregex();
+  out << *rgx.GetSubregex();
 
-  if (rgx.getSubregex()->getKind() >= rgx.getKind()) {
-    out << Alphabet::RBracket;
+  if (rgx.GetSubregex()->GetKind() >= rgx.GetKind()) {
+    out << Alphabet::kRBracket;
   }
 
-  out << (rgx.getKind() == RegexImpl<Alphabet>::RK_Kleene ? Alphabet::Star
-                                                      : Alphabet::QuestionMark);
+  out << (rgx.GetKind() == RegexImpl<Alphabet>::RK_Kleene
+              ? Alphabet::kStar
+              : Alphabet::kQuestionMark);
   return out;
 }
 
 template <class OStream, typename Alphabet>
 OStream& operator<<(OStream& out, const RegexConcatenate<Alphabet>& rgx) {
-  for (const auto* sub : rgx.getSubregex()) {
-    if (sub->getKind() >= rgx.getKind()) {
-      out << Alphabet::LBracket;
+  for (const auto* sub : rgx.GetSubregex()) {
+    if (sub->GetKind() >= rgx.GetKind()) {
+      out << Alphabet::kLBracket;
     }
     out << *sub;
-    if (sub->getKind() >= rgx.getKind()) {
-      out << Alphabet::RBracket;
+    if (sub->GetKind() >= rgx.GetKind()) {
+      out << Alphabet::kRBracket;
     }
   }
   return out;
@@ -369,188 +381,191 @@ OStream& operator<<(OStream& out, const RegexConcatenate<Alphabet>& rgx) {
 
 template <class OStream, typename Alphabet>
 OStream& operator<<(OStream& out, const RegexAlternate<Alphabet>& rgx) {
-  out << *rgx.getSubregex()[0];
-  for (size_t i = 1; i < rgx.getSubregex().size(); ++i) {
-    out << Alphabet::Plus << *rgx.getSubregex()[i];
+  out << *rgx.GetSubregex()[0];
+  for (size_t i = 1; i < rgx.GetSubregex().size(); ++i) {
+    out << Alphabet::kPlus << *rgx.GetSubregex()[i];
   }
   return out;
 }
 
 template <class OStream, typename Alphabet>
 OStream& operator<<(OStream& out, const RegexImpl<Alphabet>& rgx) {
-  switch (rgx.getKind()) {
+  switch (rgx.GetKind()) {
     case RegexImpl<Alphabet>::RK_Letter:
-      out << *mgk::cast<RegexLetter<Alphabet>>(rgx);
+      out << *mgk::Cast<RegexLetter<Alphabet>>(rgx);
       return out;
     case RegexImpl<Alphabet>::RK_Kleene:
     case RegexImpl<Alphabet>::RK_Optional:
-      out << *mgk::cast<RegexQuantified<Alphabet>>(rgx);
+      out << *mgk::Cast<RegexQuantified<Alphabet>>(rgx);
       return out;
     case RegexImpl<Alphabet>::RK_Alternate:
-      out << *mgk::cast<RegexAlternate<Alphabet>>(rgx);
+      out << *mgk::Cast<RegexAlternate<Alphabet>>(rgx);
       return out;
     case RegexImpl<Alphabet>::RK_Concatenate:
-      out << *mgk::cast<RegexConcatenate<Alphabet>>(rgx);
+      out << *mgk::Cast<RegexConcatenate<Alphabet>>(rgx);
       return out;
     case RegexImpl<Alphabet>::RK_Empty:
-      assert(mgk::cast<RegexEmpty<Alphabet>>(rgx));
-      out << Alphabet::EmptyWord;
+      assert(mgk::Cast<RegexEmpty<Alphabet>>(rgx));
+      out << Alphabet::kEmptyWord;
       return out;
     default:
-      assert(0 && "Bad regex");
+      assert(false && "Bad regex");
   }
   return out;
 }
 
-template<typename Alphabet>
+template <typename Alphabet>
 class Regex {
   using CharT = Alphabet::CharT;
-  RegexImpl<Alphabet>* impl = nullptr;
-  size_t* n_owns            = nullptr;
+  RegexImpl<Alphabet>* impl_ = nullptr;
+  size_t* n_owns_ = nullptr;
 
-  Regex(RegexImpl<Alphabet>* rgx) : impl(rgx), n_owns(new size_t(1)) {
-    assert(impl);
+  explicit Regex(RegexImpl<Alphabet>* rgx)
+      : impl_(rgx), n_owns_(new size_t(1)) {
+    assert(impl_);
   }
 
   // MUST be called on every non-const method;
-  void modify() {
-    if(*n_owns != 1) {
-      --*n_owns;
-      n_owns = new size_t(1);
-      impl = impl->Copy();
+  void Modify() {
+    if (*n_owns_ != 1) {
+      --*n_owns_;
+      n_owns_ = new size_t(1);
+      impl_ = impl_->Copy();
     }
   }
 
-  void forget() {
-    assert(*n_owns == 1);
-    delete n_owns;
-    n_owns = nullptr;
-    impl   = nullptr;
+  void Forget() {
+    assert(*n_owns_ == 1);
+    delete n_owns_;
+    n_owns_ = nullptr;
+    impl_ = nullptr;
   }
 
-public:
-  Regex() : impl(nullptr) {}
+ public:
+  Regex() : impl_(nullptr) {}
 
-  explicit Regex(std::basic_string_view<typename Alphabet::CharT> str) : impl(RegexImpl<Alphabet>::FromString(str)), n_owns(new size_t(1)) {
-    if(!impl) {
+  explicit Regex(std::basic_string_view<typename Alphabet::CharT> str)
+      : impl_(RegexImpl<Alphabet>::FromString(str)), n_owns_(new size_t(1)) {
+    if (!impl_) {
       throw std::runtime_error("Not a regex");
     }
   }
 
-  Regex(const Regex& oth) : impl(oth.impl), n_owns(oth.n_owns) {
-    (*n_owns)++;
+  Regex(const Regex& oth) : impl_(oth.impl_), n_owns_(oth.n_owns_) {
+    (*n_owns_)++;
   }
 
   Regex& operator=(const Regex& oth) {
     this->~Regex();
-    new(this) Regex(oth);
+    new (this) Regex(oth);
     return *this;
   }
 
   Regex(Regex&& oth) {
-    impl   = oth.impl;
-    n_owns = oth.n_owns;
-    oth.impl   = nullptr;
-    oth.n_owns = nullptr;
+    impl_ = oth.impl_;
+    n_owns_ = oth.n_owns_;
+    oth.impl_ = nullptr;
+    oth.n_owns_ = nullptr;
   }
 
   Regex& operator=(Regex&& oth) {
-    std::swap(impl, oth.impl);
-    std::swap(n_owns, oth.n_owns);
+    std::swap(impl_, oth.impl_);
+    std::swap(n_owns_, oth.n_owns_);
     return *this;
   }
 
   ~Regex() {
-    if(n_owns && !--(*n_owns)) {
-      delete n_owns;
-      delete impl;
+    if (n_owns_ && !--(*n_owns_)) {
+      delete n_owns_;
+      delete impl_;
     }
   }
 
-  static Regex EmptyString() {
-    return Regex(new RegexEmpty<Alphabet>);
-  }
+  static Regex EmptyString() { return Regex(new RegexEmpty<Alphabet>); }
 
   static Regex SingeLetter(CharT chr) {
     return Regex(new RegexLetter<Alphabet>(Alphabet::Ord(chr)));
   }
 
-  const RegexImpl<Alphabet>* getImpl() const {return impl;}
+  const RegexImpl<Alphabet>* GetImpl() const { return impl_; }
 
-  Regex& concat(Regex oth) {
-    if(!impl || mgk::isa<RegexEmpty<Alphabet>>(*impl)) {
+  Regex& Concat(Regex oth) {
+    if (!impl_ || mgk::Isa<RegexEmpty<Alphabet>>(*impl_)) {
       return *this = std::move(oth);
     }
 
-    if(mgk::isa<RegexEmpty<Alphabet>>(*oth.impl))
+    if (mgk::Isa<RegexEmpty<Alphabet>>(*oth.impl_)) {
       return *this;
+    }
 
-    modify();
-    oth.modify(); // Make oth single-owner;
+    Modify();
+    oth.Modify();  // Make oth single-owner;
 
-    if(mgk::isa<RegexConcatenate<Alphabet>, RegexImpl<Alphabet>>(impl)) {
-      mgk::cast<RegexConcatenate<Alphabet>>(impl)->getSubregex().push_back(oth.impl);
+    if (mgk::Isa<RegexConcatenate<Alphabet>, RegexImpl<Alphabet>>(impl_)) {
+      mgk::Cast<RegexConcatenate<Alphabet>>(impl_)->GetSubregex().push_back(
+          oth.impl_);
     } else {
       auto* rgx = new RegexConcatenate<Alphabet>;
-      rgx->getSubregex().push_back(impl);
-      rgx->getSubregex().push_back(oth.impl);
-      impl = rgx;
+      rgx->GetSubregex().push_back(impl_);
+      rgx->GetSubregex().push_back(oth.impl_);
+      impl_ = rgx;
     }
 
-    oth.forget();
+    oth.Forget();
     return *this;
   }
 
-  Regex& alternate(Regex oth) {
-    if(!impl) {
+  Regex& Alternate(Regex oth) {
+    if (!impl_) {
       return *this = std::move(oth);
     }
 
-    modify();
-    oth.modify(); // Make oth single-owner;
+    Modify();
+    oth.Modify();  // Make oth single-owner;
 
-    if(mgk::isa<RegexAlternate<Alphabet>, RegexImpl<Alphabet>>(impl)) {
-      mgk::cast<RegexAlternate<Alphabet>>(impl)->getSubregex().push_back(oth.impl);
+    if (mgk::Isa<RegexAlternate<Alphabet>, RegexImpl<Alphabet>>(impl_)) {
+      mgk::Cast<RegexAlternate<Alphabet>>(impl_)->GetSubregex().push_back(
+          oth.impl_);
     } else {
       auto* rgx = new RegexAlternate<Alphabet>;
-      rgx->getSubregex().push_back(impl);
-      rgx->getSubregex().push_back(oth.impl);
-      impl = rgx;
+      rgx->GetSubregex().push_back(impl_);
+      rgx->GetSubregex().push_back(oth.impl_);
+      impl_ = rgx;
     }
 
-    oth.forget();
-    return *this;
-  }
-  
-  Regex& kleene() {
-    assert(impl);
-    modify();
-    impl = new RegexQuantified<Alphabet>(impl, RegexImpl<Alphabet>::RK_Kleene);
+    oth.Forget();
     return *this;
   }
 
-  Regex& optional() {
-    assert(impl);
-    modify();
-    impl = new RegexQuantified<Alphabet>(impl, RegexImpl<Alphabet>::RK_Optional);
+  Regex& Kleene() {
+    assert(impl_);
+    Modify();
+    impl_ =
+        new RegexQuantified<Alphabet>(impl_, RegexImpl<Alphabet>::RK_Kleene);
+    return *this;
+  }
+
+  Regex& Optional() {
+    assert(impl_);
+    Modify();
+    impl_ =
+        new RegexQuantified<Alphabet>(impl_, RegexImpl<Alphabet>::RK_Optional);
     return *this;
   }
 
   // Shallow ==
   bool operator==(const Regex& other) const = default;
   bool operator!=(const Regex& other) const = default;
-
 };
-template<typename OStream, typename Alphabet>
+template <typename OStream, typename Alphabet>
 OStream& operator<<(OStream& out, const Regex<Alphabet>& rgx) {
-  if(!rgx.getImpl()) {
+  if (!rgx.GetImpl()) {
     out << "\"\"";
     return out;
   }
-  out << *rgx.getImpl();
+  out << *rgx.GetImpl();
   return out;
 }
-
 
 }  // namespace rgx
 
