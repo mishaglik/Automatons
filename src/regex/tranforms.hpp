@@ -317,7 +317,7 @@ Regex<Alphabet> RegexFromFDFA(const FDFA<Alphabet>& dfa) {
 
 template <typename Alphabet>
 FDFA<Alphabet> MDFAFromRegex(Regex<Alphabet> rgx) {
-  return Minimize(FDFAFromNFA(NFAFromRegex(rgx).removeEpsilonTransitions()));
+  return Minimize(FDFAFromNFA(NFAFromRegex(rgx).RemoveEpsilonTransitions()));
 }
 
 }  // namespace rgx
