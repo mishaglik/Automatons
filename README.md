@@ -37,3 +37,16 @@ cmake . -DCMAKE_BUILD_TYPE=Debug
 cmake --build .
 make rgx_coverage
 ```
+
+## Task (variant 12)
+Function ```MaxRegexMatch```
+
+### Alogorithm
+1) Transform regex -> NFSA without epsilon transition (we can do it in polynomial time).
+2) Match string in NFSA $O(|Q|^2)$ on one transition, so $O(|Q|^2|S|)$ on all transitions. So it's polynomial time.
+
+Total: polynomial time.
+
+
+
+
