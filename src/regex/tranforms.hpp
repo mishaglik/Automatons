@@ -320,6 +320,11 @@ FDFA<Alphabet> MDFAFromRegex(Regex<Alphabet> rgx) {
   return Minimize(FDFAFromNFA(NFAFromRegex(rgx).RemoveEpsilonTransitions()));
 }
 
+template <typename Alphabet>
+size_t MaxRegexMatch(std::string regex, std::string_view str) {
+  return rgx::NFAFromRegex(rgx::Regex<Alphabet>::FromReversePolishNotation(regex)).RemoveEpsilonTransitions().MaxMatch(str);
+}
+
 }  // namespace rgx
 
 #endif /* REGEX_TRANFORMS_HPP */

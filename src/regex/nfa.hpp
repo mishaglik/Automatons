@@ -27,6 +27,7 @@ class NFSA {
   std::vector<std::map<uint64_t, std::vector<Node>>> m_transitions_;
   Node start_state_ = 0;
   Node m_free_node_ = 1;
+  bool any_epsilon_ = true;
 
  public:
   static const constexpr Node kErrorState = ~0ul;
@@ -77,6 +78,8 @@ class NFSA {
   }
 
   void AddTransition(Node from, uint64_t via, Node to) {
+    if(via == kEpsilon) 
+      any_epsilon_ = true;
     if (!HasTransition(from, via, to)) {
       m_transitions_[from][via].push_back(to);
     }
@@ -108,6 +111,10 @@ class NFSA {
   void Alternate(NFSA other);
   void Kleene();
   void Optional();
+
+  size_t MaxMatch(std::basic_string_view<CharT> sv) const;
+
+  bool IsAnyEpsilon() const {return any_epsilon_;}
 
   Node CreateNode() {
     m_transitions_.emplace_back();
@@ -151,6 +158,7 @@ class NFSA {
 
 template <typename Alphabet>
 void NFSA<Alphabet>::Concat(NFSA<Alphabet> oth) {
+  any_epsilon_ = true;
   Validate();
   oth.Validate();
   Node delta = Size();
@@ -184,6 +192,7 @@ void NFSA<Alphabet>::Concat(NFSA<Alphabet> oth) {
 
 template <typename Alphabet>
 void NFSA<Alphabet>::Alternate(NFSA<Alphabet> oth) {
+  any_epsilon_ = true;
   Validate();
   oth.Validate();
 
@@ -226,6 +235,7 @@ void NFSA<Alphabet>::Alternate(NFSA<Alphabet> oth) {
 
 template <typename Alphabet>
 void NFSA<Alphabet>::Kleene() {
+  any_epsilon_ = true;
   Node new_start = CreateNode();
 
   AddTransition(new_start, kEpsilon, Start());
@@ -241,6 +251,7 @@ void NFSA<Alphabet>::Kleene() {
 
 template <typename Alphabet>
 void NFSA<Alphabet>::Optional() {
+  any_epsilon_ = true;
   Node new_start = CreateNode();
 
   AddTransition(new_start, kEpsilon, Start());
@@ -302,6 +313,8 @@ void NFSA<Alphabet>::GraphDump(const char* filename) const {
 
 template <typename Alphabet>
 NFSA<Alphabet>& NFSA<Alphabet>::RemoveEpsilonTransitions() {
+  if(!any_epsilon_)
+    return *this;
   std::vector<Node> worklist;
   std::set<Node> reachable;
   for (size_t node = 0; node < Size(); ++node) {
@@ -346,6 +359,7 @@ NFSA<Alphabet>& NFSA<Alphabet>::RemoveEpsilonTransitions() {
   }
   OptimizeUnreachable();
   Validate();
+  any_epsilon_ = false;
   return *this;
 }
 
@@ -419,6 +433,30 @@ void NFSA<Alphabet>::OptimizeUnreachableTerm() {
     }
   }
 }
+
+template<typename Alphabet>
+size_t NFSA<Alphabet>::MaxMatch(std::basic_string_view<CharT> sv) const {
+  assert(!any_epsilon_);
+  std::set<Node> state{start_state_};
+
+  for(size_t i = 0; i < sv.length(); ++i) {
+    uint64_t via = Alphabet::Ord(sv[i]);
+    std::set<Node> trans;
+    for(auto from : state) {
+      if (m_transitions_[from].find(via) != m_transitions_[from].end()) {
+        for(auto to : m_transitions_[from].at(via)) {
+          trans.insert(to);
+        }
+      }
+    }
+
+    if(trans.empty())
+      return i;
+    state.swap(trans);
+  }
+  return sv.length();
+}
+
 
 }  // namespace rgx
 
