@@ -11,19 +11,19 @@ struct SimpleAlphabet {
   using CharT = char;
   static const constexpr uint64_t kErrorChr = ~0ul;
   static const constexpr CharT kQuestionMark = '?';
-  static const constexpr CharT kStar         = '*';
-  static const constexpr CharT kLBracket     = '(';
-  static const constexpr CharT kRBracket     = ')';
-  static const constexpr CharT kEmptyWord    = '_';
-  static const constexpr CharT kPlus         = '+';
-  static const constexpr CharT kConcat       = '$';
-  static const constexpr CharT kEscapeChar   = '\\';
+  static const constexpr CharT kStar = '*';
+  static const constexpr CharT kLBracket = '(';
+  static const constexpr CharT kRBracket = ')';
+  static const constexpr CharT kEmptyWord = '_';
+  static const constexpr CharT kPlus = '+';
+  static const constexpr CharT kConcat = '$';
+  static const constexpr CharT kEscapeChar = '\\';
 
   static constexpr bool IsSpace(CharT chr) { return chr == ' '; }
 
   static constexpr bool NeedEscape(CharT chr) {
     return chr == '(' || chr == ')' || chr == '\\' || chr == '*' ||
-           chr == '_' || chr == '+' || chr == '?'  || chr == '$';
+           chr == '_' || chr == '+' || chr == '?' || chr == '$';
   }
 
   static const constexpr std::size_t kSize = N + 1;
@@ -52,20 +52,20 @@ template <std::size_t N>
 struct CanonicalAlphabet {
   using CharT = char;
   static const constexpr uint64_t kErrorChr = ~0ul;
-  static const constexpr CharT kStar         = '*';
-  static const constexpr CharT kLBracket     = '(';
-  static const constexpr CharT kRBracket     = ')';
-  static const constexpr CharT kEmptyWord    = '1';
-  static const constexpr CharT kPlus         = '+';
-  static const constexpr CharT kConcat       = '.';
-  static const constexpr CharT kEscapeChar   = '\\';
+  static const constexpr CharT kStar = '*';
+  static const constexpr CharT kLBracket = '(';
+  static const constexpr CharT kRBracket = ')';
+  static const constexpr CharT kEmptyWord = '1';
+  static const constexpr CharT kPlus = '+';
+  static const constexpr CharT kConcat = '.';
+  static const constexpr CharT kEscapeChar = '\\';
   static const constexpr CharT kQuestionMark = '?';
 
   static constexpr bool IsSpace(CharT chr) { return chr == ' '; }
 
   static constexpr bool NeedEscape(CharT chr) {
-    return chr == '(' || chr == ')' || chr == '*' ||
-           chr == '_' || chr == '+' || chr == '.';
+    return chr == '(' || chr == ')' || chr == '*' || chr == '_' || chr == '+' ||
+           chr == '.';
   }
 
   static const constexpr std::size_t kSize = N + 1;

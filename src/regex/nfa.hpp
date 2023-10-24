@@ -78,8 +78,7 @@ class NFSA {
   }
 
   void AddTransition(Node from, uint64_t via, Node to) {
-    if(via == kEpsilon) 
-      any_epsilon_ = true;
+    if (via == kEpsilon) any_epsilon_ = true;
     if (!HasTransition(from, via, to)) {
       m_transitions_[from][via].push_back(to);
     }
@@ -114,7 +113,7 @@ class NFSA {
 
   size_t MaxMatch(std::basic_string_view<CharT> sv) const;
 
-  bool IsAnyEpsilon() const {return any_epsilon_;}
+  bool IsAnyEpsilon() const { return any_epsilon_; }
 
   Node CreateNode() {
     m_transitions_.emplace_back();
@@ -313,8 +312,7 @@ void NFSA<Alphabet>::GraphDump(const char* filename) const {
 
 template <typename Alphabet>
 NFSA<Alphabet>& NFSA<Alphabet>::RemoveEpsilonTransitions() {
-  if(!any_epsilon_)
-    return *this;
+  if (!any_epsilon_) return *this;
   std::vector<Node> worklist;
   std::set<Node> reachable;
   for (size_t node = 0; node < Size(); ++node) {
@@ -434,29 +432,29 @@ void NFSA<Alphabet>::OptimizeUnreachableTerm() {
   }
 }
 
-template<typename Alphabet>
+template <typename Alphabet>
 size_t NFSA<Alphabet>::MaxMatch(std::basic_string_view<CharT> sv) const {
   assert(!any_epsilon_);
   std::set<Node> state{start_state_};
-
-  for(size_t i = 0; i < sv.length(); ++i) {
+  size_t ans = ~0ul;
+  for (size_t i = 0; i < sv.length(); ++i) {
     uint64_t via = Alphabet::Ord(sv[i]);
     std::set<Node> trans;
-    for(auto from : state) {
+    for (auto from : state) {
+      if (IsFinite(from)) ans = i;
+
       if (m_transitions_[from].find(via) != m_transitions_[from].end()) {
-        for(auto to : m_transitions_[from].at(via)) {
+        for (auto to : m_transitions_[from].at(via)) {
           trans.insert(to);
         }
       }
     }
 
-    if(trans.empty())
-      return i;
+    if (trans.empty()) return ans;
     state.swap(trans);
   }
-  return sv.length();
+  return ans;
 }
-
 
 }  // namespace rgx
 
