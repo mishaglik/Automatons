@@ -1,6 +1,7 @@
 #ifndef REGEX_REGEX_HPP
 #define REGEX_REGEX_HPP
 
+#include <algorithm>
 #include <string>
 #include <vector>
 
@@ -67,6 +68,8 @@ class RegexImpl {
     assert(false && "Copying bare regex");
     return nullptr;
   }
+
+  virtual void Reverse() {}
 
  protected:
   static RegexImpl* FromString(TokenIterator<Alphabet>& it);
@@ -198,6 +201,8 @@ class RegexQuantified : public RegexImpl<Alphabet> {
   RegexQuantified* Copy() const override {
     return new RegexQuantified(m_regex_->Copy(), this->GetKind());
   }
+
+  virtual void Reverse() override { m_regex_->Reverse(); }
 };
 
 template <typename Alphabet>
@@ -260,6 +265,13 @@ class RegexConcatenate : public RegexImpl<Alphabet> {
       copy->regex_.push_back(sub->Copy());
     }
     return copy;
+  }
+
+  virtual void Reverse() override {
+    std::reverse(regex_.begin(), regex_.end());
+    for (RegexImpl<Alphabet>* r : regex_) {
+      r->Reverse();
+    }
   }
 };
 
@@ -325,6 +337,12 @@ class RegexAlternate : public RegexImpl<Alphabet> {
       copy->regex_.push_back(sub->Copy());
     }
     return copy;
+  }
+
+  virtual void Reverse() override {
+    for (RegexImpl<Alphabet>* r : regex_) {
+      r->Reverse();
+    }
   }
 };
 
@@ -441,6 +459,51 @@ class Regex {
     impl_ = nullptr;
   }
 
+  static Regex FromPolishNotationImpl(TokenIterator<Alphabet>& it) {
+    switch (it->type) {
+      case RegexToken<Alphabet>::Type::Letter: {
+        Regex r{new RegexLetter<Alphabet>(it->chr)};
+        it++;
+        return std::move(r);
+      }
+
+      case RegexToken<Alphabet>::Type::KleeneStar: {
+        it++;
+        Regex r = FromPolishNotationImpl(it);
+        if (!r.GetImpl()) return {};
+        r.Kleene();
+        return std::move(r);
+      }
+
+      case RegexToken<Alphabet>::Type::Alternate: {
+        it++;
+        Regex r = FromPolishNotationImpl(it);
+        if (!r.GetImpl()) return {};
+        r.Alternate(FromPolishNotationImpl(it));
+        return std::move(r);
+      }
+
+      case RegexToken<Alphabet>::Type::Concatenate: {
+        it++;
+        Regex r = FromPolishNotationImpl(it);
+        if (!r.GetImpl()) return {};
+        r.Concat(FromPolishNotationImpl(it));
+        return std::move(r);
+      }
+
+      case RegexToken<Alphabet>::Type::Empty:
+        return EmptyString();
+
+      case RegexToken<Alphabet>::Type::Error:
+      case RegexToken<Alphabet>::Type::QuestionMark:
+      case RegexToken<Alphabet>::Type::LBracket:
+      case RegexToken<Alphabet>::Type::RBracket:
+      case RegexToken<Alphabet>::Type::EOL:
+      default:
+        return {};
+    }
+  }
+
  public:
   Regex() : impl_(nullptr) {}
 
@@ -485,6 +548,19 @@ class Regex {
 
   static Regex SingeLetter(CharT chr) {
     return Regex(new RegexLetter<Alphabet>(Alphabet::Ord(chr)));
+  }
+
+  static Regex FromPolishNotation(std::basic_string_view<CharT> sv) {
+    Tokenizer<Alphabet> tokenizer{sv};
+    TokenIterator<Alphabet> it = tokenizer.begin();
+    return FromPolishNotationImpl(it);
+  }
+
+  static Regex FromReversePolishNotation(std::basic_string<CharT> str) {
+    std::reverse(str.begin(), str.end());
+    auto r = FromPolishNotation(str);
+    r.Reverse();
+    return std::move(r);
   }
 
   const RegexImpl<Alphabet>* GetImpl() const { return impl_; }
@@ -550,6 +626,11 @@ class Regex {
     Modify();
     impl_ =
         new RegexQuantified<Alphabet>(impl_, RegexImpl<Alphabet>::RK_Optional);
+    return *this;
+  }
+
+  Regex& Reverse() {
+    if (impl_) impl_->Reverse();
     return *this;
   }
 

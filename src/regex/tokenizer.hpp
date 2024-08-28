@@ -16,6 +16,7 @@ struct RegexToken {
     Letter,
     KleeneStar,
     QuestionMark,
+    Concatenate,
     Alternate,
     LBracket,
     RBracket,
@@ -105,6 +106,12 @@ class TokenIterator {
 
     if (str_[pos_] == Alphabet::kPlus) {
       token_.type = Token::Type::Alternate;
+      pos_++;
+      return;
+    }
+
+    if (str_[pos_] == Alphabet::kConcat) {
+      token_.type = Token::Type::Concatenate;
       pos_++;
       return;
     }
