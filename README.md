@@ -1,5 +1,8 @@
 # Automatons 
 
+## Dependencies
+    - graphviz (for graphical dumps)
+
 ## Run
 ```
 cmake . -DCMAKE_BUILD_TYPE=Debug
